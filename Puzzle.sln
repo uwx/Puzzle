@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Puzzle", "Puzzle\Puzzle.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Puzzle.Tests", "Puzzle.Tests\Puzzle.Tests.csproj", "{0FA2BA63-C80A-4B44-9FCC-1A4F24AFFBC4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PuzzleUser", "PuzzleUser\PuzzleUser.csproj", "{BCD53214-0348-4CBE-ADE0-65E3FE074F94}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,5 +31,9 @@ Global
 		{0FA2BA63-C80A-4B44-9FCC-1A4F24AFFBC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0FA2BA63-C80A-4B44-9FCC-1A4F24AFFBC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0FA2BA63-C80A-4B44-9FCC-1A4F24AFFBC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BCD53214-0348-4CBE-ADE0-65E3FE074F94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BCD53214-0348-4CBE-ADE0-65E3FE074F94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BCD53214-0348-4CBE-ADE0-65E3FE074F94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BCD53214-0348-4CBE-ADE0-65E3FE074F94}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

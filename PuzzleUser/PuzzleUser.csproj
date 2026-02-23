@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+<!--        <PreserveCompilationContext>true</PreserveCompilationContext>-->
+<!--        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>-->
+        <ExportsFile>$(MSBuildThisFileDirectory)exports.def</ExportsFile>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PublishAot>true</PublishAot>
+        <OptimizationPreference>Speed</OptimizationPreference>
+        <IlcInstructionSet>native</IlcInstructionSet>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Puzzle\Puzzle.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="JetBrains.Annotations"/>
+<!--        <PackageReference Include="Microsoft.Extensions.DependencyModel"/>-->
+<!--        <PackageReference Include="Microsoft.NETCore.DotNetHost"/>-->
+<!--        <PackageReference Include="Microsoft.NETCore.DotNetHostPolicy"/>-->
+<!--        <Reference Include="EdgeJs">-->
+<!--            <HintPath>E:\TempStuff\iqdb-labeler\node_modules\edge-js\lib\bootstrap\bin\Release\EdgeJs.dll</HintPath>-->
+<!--        </Reference>-->
+    </ItemGroup>
+
+</Project>

@@ -4,6 +4,9 @@
 //  SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System;
+using System.IO;
+using System.Linq;
 using Puzzle.Tests.Data;
 using Puzzle.Tests.Extensions;
 using SixLabors.ImageSharp;
@@ -30,6 +33,13 @@ public partial class SignatureGeneratorTests
         {
             var expectedSignature = SampleData.MonaLisaSignature.Value;
             var actualSignature = _generator.GenerateSignature(SampleImages.MonaLisa.Value);
+
+            if (!SampleImages.MonaLisa.Value.DangerousTryGetSinglePixelMemory(out var pixels))
+            {
+                throw new InvalidOperationException("The backing buffer for the image was not contiguous.");
+            }
+
+            File.WriteAllBytes(@"E:\TempStuff\Puzzle\Puzzle\mona.raw", pixels.ToArray().Select(e => e.PackedValue).ToArray());
 
             AssertExtensions.SequenceEqual(expectedSignature.Span, actualSignature);
         }

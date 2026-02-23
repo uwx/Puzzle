@@ -7,9 +7,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using Puzzle.Extensions;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Advanced;
+using SixLabors.ImageSharp.Memory;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
@@ -21,6 +24,18 @@ namespace Puzzle;
 [PublicAPI]
 public class SignatureGenerator
 {
+    private static Point[] NeighbourCoordinateMap { get; } =
+    [
+        new() { X = -1, Y = -1 },
+        new() { X = 0, Y = -1, },
+        new() { X = 1, Y = -1 },
+        new() { X = 0, Y = -1 },
+        new() { X = 0, Y = 1 },
+        new() { X = -1, Y = 1 },
+        new() { X = 0, Y = 1 },
+        new() { X = 1, Y = 1 }
+    ];
+
     /// <summary>
     /// Gets the grid size. This value indicates the grid size that the signature is composed from; that is,
     /// a value of 9 (the default) would decompose the image into a 9x9 grid of sample points (10x10 blocks), and
@@ -79,8 +94,8 @@ public class SignatureGenerator
     /// <returns>The signature.</returns>
     [PublicAPI]
     [Pure]
-    public ReadOnlySpan<LuminosityLevel> GenerateSignature(Image image) =>
-        GenerateSignature(image.CloneAs<L8>());
+    public LuminosityLevel[] GenerateSignature(Image image) =>
+        this.GenerateSignature(image.CloneAs<L8>());
 
     /// <summary>
     /// Generates a signature from the given image.
@@ -91,6 +106,24 @@ public class SignatureGenerator
     [Pure]
     public LuminosityLevel[] GenerateSignature(Image<L8> image)
     {
+        var levels = new LuminosityLevel[this.GridSize * this.GridSize * 8];
+        this.GenerateSignature(image, levels);
+        return levels;
+    }
+
+    /// <summary>
+    /// Generates a signature from the given image.
+    /// </summary>
+    /// <param name="image">The image to generate the signature from.</param>
+    /// <param name="destination">The span to write into. Must be at least of of length GridSize² * 8.</param>
+    [PublicAPI]
+    public void GenerateSignature(Image<L8> image, Span<LuminosityLevel> destination)
+    {
+        if ((uint)destination.Length < this.GridSize * this.GridSize * 8)
+        {
+            throw new ArgumentOutOfRangeException(nameof(destination), destination.Length, $"Destination length must be at least {this.GridSize * this.GridSize * 8}.");
+        }
+
         // Step 1: Generate a vector of double values representing the signature
         if (this.EnableAutocrop)
         {
@@ -104,7 +137,7 @@ public class SignatureGenerator
         var luminosityDifferences = ComputeNeighbourDifferences(sampledSquareAverages);
 
         // Step 2: Generate a vector of values representing the signature from the vector of double values
-        return ComputeRelativeLuminosityLevels(luminosityDifferences);
+        ComputeRelativeLuminosityLevels(luminosityDifferences, destination);
     }
 
     /// <summary>
@@ -113,9 +146,9 @@ public class SignatureGenerator
     /// <param name="image">The image to crop.</param>
     /// <returns>The cropped image.</returns>
     [Pure]
-    private Image<L8> AutocropImage(Image<L8> image)
+    private static Image<L8> AutocropImage(Image<L8> image)
     {
-        image.Mutate(o => o.EntropyCrop());
+        image.Mutate(static o => o.EntropyCrop());
 
         return image;
     }
@@ -138,20 +171,15 @@ public class SignatureGenerator
             Math.Round(Math.Min(image.Width, image.Height) / ((this.GridSize + 1) * this.SampleSizeRatio))
         );
 
-        var squareCenters = ComputeSquareCenters(image).ToList();
+        var squareCenters = ComputeSquareCenters(image);
 
-        if (!image.DangerousTryGetSinglePixelMemory(out var pixels))
-        {
-            throw new InvalidOperationException("The backing buffer for the image was not contiguous.");
-        }
-
-        var sampleLuminosities = new double[squareCenters.Count];
-        for (var i = 0; i < squareCenters.Count; i++)
+        var sampleLuminosities = new double[squareCenters.Length];
+        for (var i = 0; i < squareCenters.Length; i++)
         {
             var squareCenter = squareCenters[i];
             sampleLuminosities[i] = ComputeSquareAverage
             (
-                pixels,
+                image,
                 image.Width,
                 image.Height,
                 squareCenter,
@@ -168,22 +196,27 @@ public class SignatureGenerator
     /// <param name="image">The image.</param>
     /// <returns>The centers.</returns>
     [Pure]
-    private IEnumerable<Point> ComputeSquareCenters(Image<L8> image)
+    private Point[] ComputeSquareCenters(Image<L8> image)
     {
         var widthOffset = image.Width / (double)(this.GridSize + 1);
         var heightOffset = image.Height / (double)(this.GridSize + 1);
 
+        var points = new Point[this.GridSize * this.GridSize];
+
+        var i = 0;
         for (var x = 0; x < this.GridSize; ++x)
         {
             for (var y = 0; y < this.GridSize; ++y)
             {
-                yield return new Point
+                points[i++] = new Point
                 {
                     X = (int)Math.Round(widthOffset * (x + 1)),
                     Y = (int)Math.Round(heightOffset * (y + 1))
                 };
             }
         }
+
+        return points;
     }
 
     /// <summary>
@@ -198,7 +231,7 @@ public class SignatureGenerator
     [Pure]
     private double ComputeSquareAverage
     (
-        ReadOnlyMemory<L8> pixels,
+        Image<L8> pixels,
         int imageWidth,
         int imageHeight,
         Point squareCenter,
@@ -240,52 +273,61 @@ public class SignatureGenerator
     /// Samples the average luminosity of a 3x3 square, centered at the given coordinate. If any of the points of
     /// the square fall outside the image, no value is returned for that point.
     /// </summary>
-    /// <param name="pixels">The image to sample.</param>
+    /// <param name="image">The image to sample.</param>
     /// <param name="imageWidth">The width of the image.</param>
     /// <param name="imageHeight">The height of the image.</param>
     /// <param name="point">The center of the point to sample.</param>
     /// <returns>The sampled values.</returns>
     [Pure]
-    private double Sample3x3Point(ReadOnlyMemory<L8> pixels, int imageWidth, int imageHeight, Point point)
+    private double Sample3x3Point(Image<L8> image, int imageWidth, int imageHeight, Point point)
     {
         var sum = 0.0;
 
-        for (var heightOffset = 0; heightOffset < 3; ++heightOffset)
+        for (var heightOffset = -1; heightOffset <= 1; ++heightOffset)
         {
             var (pointX, pointY) = point;
-            var y = (pointY - 1) + heightOffset;
+            var y = pointY + heightOffset;
 
-            if (y > imageHeight - 1 || y < 0)
+            if (y >= imageHeight || y < 0)
             {
                 continue;
             }
 
-            for (var widthOffset = 0; widthOffset < 3; ++widthOffset)
-            {
-                var x = (pointX - 1) + widthOffset;
+            var pixels = image.DangerousGetPixelRowMemory(y).Span;
 
-                if (x > imageWidth - 1 || x < 0)
+            for (var widthOffset = -1; widthOffset <= 1; ++widthOffset)
+            {
+                var x = pointX + widthOffset;
+
+                if (x >= imageWidth || x < 0)
                 {
                     continue;
                 }
 
-                var spandex = x + (y * imageWidth);
-                sum += pixels.Span[spandex].PackedValue;
+                // var spandex = x + (y * imageWidth);
+                // sum += GetIndex(image, spandex).PackedValue;
+                sum += pixels[x].PackedValue;
             }
         }
 
         return sum / 9;
+
+        // static L8 GetIndex(IMemoryGroup<L8> group, int position)
+        // {
+        //     var (bufferIdx, bufferPos) = Math.DivRem(position, group.BufferLength);
+        //     return group[bufferIdx].Span[bufferPos];
+        // }
     }
 
     /// <summary>
     /// Converts a set of baseline double values to a complete image signature.
     /// </summary>
     /// <param name="neighbourDifferences">The baseline values.</param>
-    /// <returns>The image signature.</returns>
-    [Pure]
-    private LuminosityLevel[] ComputeRelativeLuminosityLevels
+    /// <param name="luminosityLevels">The output span to store the image signature in.</param>
+    private void ComputeRelativeLuminosityLevels
     (
-        ReadOnlySpan<double> neighbourDifferences
+        ReadOnlySpan<double> neighbourDifferences,
+        Span<LuminosityLevel> luminosityLevels
     )
     {
         var darks = new List<double>(neighbourDifferences.Length);
@@ -311,10 +353,9 @@ public class SignatureGenerator
             }
         }
 
-        var muchDarkerCutoff = darks.Count > 0 ? darks.Median() : -this.NoiseCutoff;
-        var muchLighterCutoff = lights.Count > 0 ? lights.Median() : this.NoiseCutoff;
+        var muchDarkerCutoff = darks.Count > 0 ? CollectionsMarshal.AsSpan(darks).Median() : -this.NoiseCutoff;
+        var muchLighterCutoff = lights.Count > 0 ? CollectionsMarshal.AsSpan(lights).Median() : this.NoiseCutoff;
 
-        var luminosityLevels = new LuminosityLevel[neighbourDifferences.Length];
         for (var i = 0; i < neighbourDifferences.Length; i++)
         {
             var difference = neighbourDifferences[i];
@@ -337,8 +378,6 @@ public class SignatureGenerator
                 ? LuminosityLevel.MuchLighter
                 : LuminosityLevel.Lighter;
         }
-
-        return luminosityLevels;
     }
 
     /// <summary>
@@ -350,17 +389,7 @@ public class SignatureGenerator
     [Pure]
     private double[] ComputeNeighbourDifferences(ReadOnlySpan<double> luminosityAverages)
     {
-        var neighbourCoordinateMap = new[]
-        {
-            new Point { X = -1, Y = -1 },
-            new Point { X = 0, Y = -1, },
-            new Point { X = 1, Y = -1 },
-            new Point { X = 0, Y = -1 },
-            new Point { X = 0, Y = 1 },
-            new Point { X = -1, Y = 1 },
-            new Point { X = 0, Y = 1 },
-            new Point { X = 1, Y = 1 }
-        };
+        var neighbourCoordinateMap = NeighbourCoordinateMap;
 
         var neighbourDifferences = new double[this.GridSize * this.GridSize * 8];
         var spandex = 0;

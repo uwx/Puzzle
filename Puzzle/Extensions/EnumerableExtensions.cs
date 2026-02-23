@@ -4,6 +4,7 @@
 //  SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
@@ -16,27 +17,27 @@ namespace Puzzle.Extensions;
 internal static class EnumerableExtensions
 {
     /// <summary>
-    /// Calculates the median of a set of values.
+    /// Calculates the median of a set of values. Mutates the existing span.
     /// </summary>
-    /// <param name="source">The source sequence.</param>
+    /// <param name="source">The source span.</param>
     /// <returns>The median value.</returns>
     [Pure]
-    internal static double Median(this IEnumerable<double> source)
+    internal static double Median(this Span<double> source)
     {
-        var sorted = source.OrderBy(x => x).ToList();
+        source.Sort();
 
-        if (sorted.Count == 1)
+        if (source.Length == 1)
         {
-            return sorted[0];
+            return source[0];
         }
 
-        var halfwayIndex = sorted.Count / 2;
+        var halfwayIndex = source.Length / 2;
 
-        if (sorted.Count % 2 == 0)
+        if (source.Length % 2 == 0)
         {
-            return sorted.ElementAt(halfwayIndex);
+            return source[halfwayIndex];
         }
 
-        return (sorted.ElementAt(halfwayIndex) + sorted.ElementAt(halfwayIndex - 1)) / 2.0;
+        return (source[halfwayIndex] + source[halfwayIndex - 1]) / 2.0;
     }
 }
